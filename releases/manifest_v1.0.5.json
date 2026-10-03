@@ -1,0 +1,19 @@
+{
+  "app_name": "项目统计",
+  "version": "1.0.5",
+  "build_date": "2026-10-03",
+  "packaged_at": "2026-10-03 16:32:56",
+  "python": "3.14.2",
+  "exe_sha256": "296ca3970cf8c5b54be831073c75ed634abe4c9bc9967b9a7254028f2462e22b",
+  "exe_size": 10058120,
+  "portable_zip": {
+    "name": "项目统计_v1.0.5_便携版.zip",
+    "files": 1265,
+    "size": 44680897
+  },
+  "source_zip": {
+    "name": "项目统计_v1.0.5_source.zip",
+    "size": 137170
+  },
+  "checksums": "SHA256SUMS.txt"
+}

@@ -1,0 +1,22 @@
+# 项目统计 — 依赖清单（2026-10-03 实测于 .venv，Python 3.14.2 / Windows x64）
+#
+# 用法：pip install -r requirements.txt
+# 说明：本项目在 v1.0.5 之前没有任何依赖清单，版本号只能从 .venv 里反查，
+#       这里把实际验证过的版本固定下来，保证换机器能装出同样的运行环境。
+
+# --- 运行时依赖（程序启动就要用）---
+matplotlib==3.11.1          # 统计图窗口（延迟导入，见 main_window._load_chart_modules）
+mplcursors==0.7.1           # 统计图上的悬浮数据光标
+pillow==12.3.0              # 托盘图标与图标资源的加载/转换
+pystray==0.19.5             # 系统托盘
+
+# --- 传递依赖（由上面自动安装，列出来是为了锁定版本）---
+numpy==2.5.1                # matplotlib 依赖
+pywin32-ctypes==0.2.3       # pyinstaller / pystray 在 Windows 上的依赖
+
+# --- 打包依赖（只在构建便携版时需要）---
+pyinstaller==6.21.0
+pyinstaller-hooks-contrib==2026.6
+
+# --- 开发辅助（可选）---
+pyflakes==4.0.0             # 静态检查：python -m pyflakes project_stats tools

@@ -1,0 +1,29 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# ---- 虚拟环境 ----
+.venv/
+venv/
+
+# ---- 打包中间产物（由 tools/make_release.py 重建）----
+build/
+dist/
+portable/
+
+# ---- 程序运行期数据（配置 / 日志 / 开发时间）----
+.project_stats/
+
+# ---- IDE ----
+.idea/
+
+# ---- 发布二进制（大文件，按需单独分发）----
+releases/*.zip
+
+# ---- 其它 ----
+*.tmp
+~$*
+Thumbs.db
+desktop.ini

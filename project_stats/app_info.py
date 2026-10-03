@@ -1,0 +1,4 @@
+APP_NAME = "项目统计"
+APP_VERSION = "1.0.5"
+APP_BUILD_DATE = "2026-10-03"
+
