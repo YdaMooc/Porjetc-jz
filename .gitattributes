@@ -1,0 +1,7 @@
+# 统一换行：仓库内存 LF，检出到工作区为 CRLF（与 .editorconfig 的 end_of_line=crlf 一致）
+* text=auto eol=crlf
+
+# 二进制文件不做任何转换
+*.ico  binary
+*.png  binary
+*.zip  binary

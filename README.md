@@ -5,6 +5,7 @@
 - **当前版本：1.0.5**（构建日期 2026-10-03）
 - 版本号的唯一来源：`project_stats/app_info.py` 里的 `APP_NAME` / `APP_VERSION` / `APP_BUILD_DATE`
 - 变更历史见 [`CHANGELOG.md`](CHANGELOG.md)，发布产物与校验见 [`docs/版本管理.md`](docs/版本管理.md)
+- 代码仓库：[github.com/YdaMooc/Porjetc-jz](https://github.com/YdaMooc/Porjetc-jz)（`main` 分支；便携版 zip 因体积不入库，用 `tools/make_release.py` 本地生成）
 
 ## 功能
 
