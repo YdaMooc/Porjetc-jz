@@ -22,33 +22,63 @@ from project_stats.runtime.dpi import scaled
 
 
 # ----------------------------------------------------------------- 配色
-# 页面灰 → 白色面板 → 面板内浅色块，三级层次；边框比之前淡，靠留白和阴影分层。
-APP_BG = "#eef0f5"            # 页面底色
+# 一套"柔和现代"的色板：低饱和的冷灰骨架 + 一个收敛的靛蓝强调色。
+#
+# 三条规则，改配色时照着走就不会跑偏：
+#   1. 中性色都带一点蓝紫（色相 225° 上下），不掺暖黄灰——暖灰和冷灰混用是
+#      旧版看起来"发脏"的主要原因；
+#   2. 强调色只用于"可点/已选中/数字"，其余层次全靠留白、圆角和极淡的阴影区分，
+#      不靠对比强烈的边框；
+#   3. 不用纯黑（#000）和满饱和的高亮色：正文用 #23252f，彩色一律压到中等明度。
+#   4. 同一个颜色（比如强调色的按下态）只允许有一个定义，任何地方需要"更深一点的靛蓝"
+#      都从这里取，不再就地写 #3f5fd0 之类的临时值。
+#
+# 层次自下而上：APP_BG（页面）→ WALL_BG（卡片墙）→ PANEL_BG（面板/卡片）→ SURFACE_ALT。
+# 相邻两层只差 2~4 个明度台阶，面板靠阴影"浮"起来，而不是靠描边。
+APP_BG = "#f4f6fa"            # 页面底色
 PANEL_BG = "#ffffff"          # 卡片/面板
-SURFACE_ALT = "#f6f7fa"       # 面板内的次级块（字段区、路径区）
-SURFACE_SUNKEN = "#f2f3f8"    # 更浅的凹陷块（信息条）
-LINE = "#e6e8ef"              # 常规分隔线
-LINE_STRONG = "#d9dce6"       # 需要更明确边界时
-TEXT_PRIMARY = "#1b1c20"
-TEXT_SECONDARY = "#6b6e7a"
-TEXT_TERTIARY = "#989ba6"
-ACCENT = "#0a6ff0"
-ACCENT_DARK = "#0059cc"
-ACCENT_SOFT = "#e9f2ff"
-SUCCESS = "#2fa36b"
-WARNING = "#e08a1e"
+SURFACE_ALT = "#f7f8fb"       # 面板内的次级块（字段区、路径区）
+SURFACE_SUNKEN = "#f2f4f8"    # 更浅的凹陷块（信息条）
+LINE = "#eceef4"              # 常规分隔线（比旧版淡一档，边界不强加）
+LINE_STRONG = "#dde1eb"       # 需要更明确边界时（输入框描边）
+TEXT_PRIMARY = "#23252f"
+TEXT_SECONDARY = "#666c7e"
+TEXT_TERTIARY = "#9aa0af"
+ACCENT = "#4a6cf0"            # 靛蓝：比旧版 #0a6ff0 低饱和，长时间看不刺眼
+ACCENT_HOVER = "#3a58d4"      # 悬停：比常态深一档
+ACCENT_ACTIVE = "#3350c0"     # 按下：再深一档
+ACCENT_SOFT = "#ecf0fe"       # 浅底（选中项、菜单高亮）
+ACCENT_TINT = "#93a9f6"       # 主按钮禁用态底色（浅靛蓝）
+ACCENT_TINT_FG = "#eef1fd"    # 主按钮禁用态文字（同色系白，禁用要看得出来但仍可读）
+SUCCESS = "#3f9e73"           # 成功/累计（偏灰的绿，不抢眼）
+WARNING = "#cc8a3d"           # 提醒/送样
+PURPLE = "#8a72d9"            # 第四个数据维度的点缀色（芯片数）
 ROW_NORMAL = "#ffffff"
-ROW_ALT = "#fafbfd"
-ROW_SELECTED = "#e7f0ff"
-ROW_HOVER = "#f2f7ff"
-WALL_BG = "#f3f4f8"           # 卡片墙底色：比卡片略深，卡片才"浮"得起来
-SHADOW_COLORS = ("#d7d9e4", "#e4e6ef", "#eff1f7")   # 由深到浅，模拟羽化
-SHADOW_STRONG = ("#c8cbdd", "#daddec", "#e7e9f4")   # 悬停/选中时用，卡片"浮"起来
+ROW_ALT = "#fafbfe"           # 隔行底色：冷白，比旧版的暖白更适合表格
+ROW_SELECTED = "#e9eefe"
+ROW_HOVER = "#f4f7fe"
+WALL_BG = "#f2f4f9"           # 卡片墙底色：比卡片略深，卡片才"浮"得起来
+SHADOW_COLORS = ("#e2e5ef", "#ebedf5", "#f3f5fa")   # 由深到浅，模拟羽化
+SHADOW_STRONG = ("#d3d8e6", "#dfe3ee", "#eaedf6")   # 悬停/选中时用，卡片"浮"起来
 
 # 卡片墙配色（Canvas 绘制）
 CARD_HOVER_BG = "#ffffff"
-CARD_HOVER_BORDER = "#b7c8e6"
-DETAIL_BOX_BG = "#f4f5f9"
+CARD_HOVER_BORDER = "#c3d0f2"     # 悬停描边：淡靛蓝，只做提示不做分割
+DETAIL_BOX_BG = "#f5f7fc"
+
+# 自绘控件与 ttk 细节色（集中在这里，避免同一种"悬停灰"在多处各写一遍）
+SEGMENT_TROUGH = "#e5e8f1"        # 分段控件凹槽
+BTN_HOVER = "#e9ecf6"             # 浅灰按钮悬停
+BTN_PRESSED = "#e0e4f2"           # 浅灰按钮按下
+BTN_GHOST_HOVER = "#e8ebf4"       # 无底色按钮悬停（页面底色上）
+BTN_GHOST_PRESSED = "#dfe3f0"
+SCROLL_THUMB = "#ced3e0"
+SCROLL_THUMB_HOVER = "#b8bfd1"
+SCROLL_THUMB_PRESSED = "#a5adc2"
+TAB_BG = "#e8eaf3"                # 未选中的标签页
+TAB_HOVER = "#eef1f9"
+CHART_GRID = "#ebeef5"            # 统计图表网格线
+CHART_SELECTED = "#4fae84"        # 图表里被悬停选中的柱子（比 SUCCESS 亮一点才看得出来）
 
 # 兼容旧名（统计窗口等处仍沿用）
 APP_BG_LEGACY = APP_BG
@@ -279,17 +309,18 @@ def apply_ttk_theme(root, theme: Theme) -> ttk.Style:
         style.configure(name, background=background)
 
     # ---------- 按钮
-    _flat_button(style, "TButton", SURFACE_ALT, TEXT_PRIMARY, "#e9ebf3", "#e2e5ef",
+    # 浅灰按钮的三种状态只在"底色略深一点"之间走，不做描边/阴影，和卡片一样的扁平语言。
+    _flat_button(style, "TButton", SURFACE_ALT, TEXT_PRIMARY, BTN_HOVER, BTN_PRESSED,
                  SURFACE_ALT, TEXT_TERTIARY, (pad_x, pad_y))
-    _flat_button(style, "Primary.TButton", ACCENT, "#ffffff", ACCENT_DARK, ACCENT_DARK,
-                 "#bcd6fb", "#f2f7ff", (pad_x, pad_y))
-    _flat_button(style, "Soft.TButton", SURFACE_ALT, TEXT_PRIMARY, "#e9ebf3", "#e2e5ef",
+    _flat_button(style, "Primary.TButton", ACCENT, "#ffffff", ACCENT_HOVER, ACCENT_ACTIVE,
+                 ACCENT_TINT, ACCENT_TINT_FG, (pad_x, pad_y))
+    _flat_button(style, "Soft.TButton", SURFACE_ALT, TEXT_PRIMARY, BTN_HOVER, BTN_PRESSED,
                  SURFACE_ALT, TEXT_TERTIARY, (pad_x, pad_y))
-    _flat_button(style, "Ghost.TButton", APP_BG, TEXT_SECONDARY, "#e6e9f1", "#dfe3ed",
+    _flat_button(style, "Ghost.TButton", APP_BG, TEXT_SECONDARY, BTN_GHOST_HOVER, BTN_GHOST_PRESSED,
                  APP_BG, TEXT_TERTIARY, (compact_x, compact_y))
-    _flat_button(style, "CompactPrimary.TButton", ACCENT, "#ffffff", ACCENT_DARK, ACCENT_DARK,
-                 "#bcd6fb", "#f2f7ff", (compact_x, compact_y))
-    _flat_button(style, "CompactSoft.TButton", SURFACE_ALT, TEXT_PRIMARY, "#e9ebf3", "#e2e5ef",
+    _flat_button(style, "CompactPrimary.TButton", ACCENT, "#ffffff", ACCENT_HOVER, ACCENT_ACTIVE,
+                 ACCENT_TINT, ACCENT_TINT_FG, (compact_x, compact_y))
+    _flat_button(style, "CompactSoft.TButton", SURFACE_ALT, TEXT_PRIMARY, BTN_HOVER, BTN_PRESSED,
                  SURFACE_ALT, TEXT_TERTIARY, (compact_x, compact_y))
 
     # ---------- 输入类
@@ -385,15 +416,15 @@ def apply_ttk_theme(root, theme: Theme) -> ttk.Style:
         style.configure(
             name,
             width=theme.scrollbar_width,
-            background="#d3d6e2",
+            background=SCROLL_THUMB,
             troughcolor=PANEL_BG,
             bordercolor=PANEL_BG,
-            lightcolor="#d3d6e2",
-            darkcolor="#d3d6e2",
+            lightcolor=SCROLL_THUMB,
+            darkcolor=SCROLL_THUMB,
             arrowcolor=PANEL_BG,
             relief="flat",
         )
-        style.map(name, background=[("active", "#bfc3d4"), ("pressed", "#aeb3c7")])
+        style.map(name, background=[("active", SCROLL_THUMB_HOVER), ("pressed", SCROLL_THUMB_PRESSED)])
 
     # 旧名字（旧代码里还有引用）指到同一套样式
     for prefix in ("Vertical", "Horizontal"):
@@ -409,14 +440,14 @@ def apply_ttk_theme(root, theme: Theme) -> ttk.Style:
     style.configure(
         "Settings.TNotebook.Tab",
         padding=(scaled(18, theme.scale), scaled(7, theme.scale)),
-        background="#e7e9f1",
+        background=TAB_BG,
         foreground=TEXT_SECONDARY,
         borderwidth=0,
         font=theme.ui,
     )
     style.map(
         "Settings.TNotebook.Tab",
-        background=[("selected", PANEL_BG), ("active", "#eef0f6")],
+        background=[("selected", PANEL_BG), ("active", TAB_HOVER)],
         foreground=[("selected", TEXT_PRIMARY)],
         expand=[("selected", (0, 0, 0, 0))],
     )

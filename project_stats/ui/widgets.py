@@ -269,10 +269,12 @@ class _CanvasButton(tk.Canvas):
 class RoundedButton(_CanvasButton):
     """圆角按钮：primary（实心蓝）/ soft（浅灰）/ ghost（无底色）。"""
 
+    # 每种按钮的状态色都取 theme 里的 token：同一套按钮在工具栏、卡片详情、
+    # 统计窗口里出现，颜色必须只有一个来源。
     _KINDS = {
-        "primary": (th.ACCENT, "#ffffff", th.ACCENT_DARK, th.ACCENT_DARK, "#bcd6fb", "#f0f6ff"),
-        "soft": (th.SURFACE_ALT, th.TEXT_PRIMARY, "#e9ebf3", "#e2e5ef", th.SURFACE_ALT, th.TEXT_TERTIARY),
-        "ghost": (th.APP_BG, th.TEXT_SECONDARY, "#e6e9f1", "#dfe3ed", th.APP_BG, th.TEXT_TERTIARY),
+        "primary": (th.ACCENT, "#ffffff", th.ACCENT_HOVER, th.ACCENT_ACTIVE, th.ACCENT_TINT, th.ACCENT_TINT_FG),
+        "soft": (th.SURFACE_ALT, th.TEXT_PRIMARY, th.BTN_HOVER, th.BTN_PRESSED, th.SURFACE_ALT, th.TEXT_TERTIARY),
+        "ghost": (th.APP_BG, th.TEXT_SECONDARY, th.BTN_GHOST_HOVER, th.BTN_GHOST_PRESSED, th.APP_BG, th.TEXT_TERTIARY),
     }
 
     def __init__(self, master: tk.Misc, theme: th.Theme, text: str, command: Callable[[], None] | None = None,
@@ -387,7 +389,7 @@ class SegmentedControl(tk.Canvas):
         # 凹槽
         self.create_polygon(
             rounded_rect_points(0, 0, width - 1, height - 1, (height - 1) / 2),
-            smooth=True, splinesteps=16, fill="#e7e9f0", outline="#e7e9f0", tags="seg",
+            smooth=True, splinesteps=16, fill=th.SEGMENT_TROUGH, outline=th.SEGMENT_TROUGH, tags="seg",
         )
         # 滑块
         left = inset + self._active * self._segment_width

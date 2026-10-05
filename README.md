@@ -2,7 +2,7 @@
 
 本地项目目录的检索与开发工时统计工具（Windows 桌面应用，Tkinter + PyInstaller）。
 
-- **当前版本：1.0.5**（构建日期 2026-10-03）
+- **当前版本：1.0.9**（构建日期 2026-10-05）
 - 版本号的唯一来源：`project_stats/app_info.py` 里的 `APP_NAME` / `APP_VERSION` / `APP_BUILD_DATE`
 - 变更历史见 [`CHANGELOG.md`](CHANGELOG.md)，发布产物与校验见 [`docs/版本管理.md`](docs/版本管理.md)
 - 代码仓库：[github.com/YdaMooc/Porjetc-jz](https://github.com/YdaMooc/Porjetc-jz)（`main` 分支；便携版 zip 因体积不入库，用 `tools/make_release.py` 本地生成）
@@ -14,6 +14,23 @@
 - 自动记录每个项目的开发时间：同一时刻只归属一个项目，带空闲检测与切换宽限期
 - 项目统计图：送样次数、业务员、年份、芯片型号、封装分布
 - 关闭到系统托盘、单实例运行、低完整性环境自检（启动日志会写明）
+
+## 对项目目录只读，且读取范围写死
+
+程序不会写入、改名、移动、删除项目目录里的任何东西。读取范围也是受限的：
+
+| 位置 | 允许的操作 |
+| --- | --- |
+| 项目根目录的 0 字节无扩展名标记文件 | 只读**文件名**——芯片型号与脚位都是从这一个名字里解析的 |
+| 项目根目录 | 只按名字判断项，不读文件内容 |
+| `送样\` 及版本子目录 | 只按**目录名**数版本数（`count_sample_versions`），不读文件内容、不递归 |
+
+**不做的事**：不为了补全芯片型号或脚位去读送样版本目录里的文件——那里放的是已经送出去的
+样品版本，扩一次读取范围就是一次碰到历史送样文件的风险。标记文件名里没写封装的项目，
+脚位如实显示「未设置」，可以用筛选下拉的「未设置」把它筛出来人工确认。
+
+> v1.0.5 ~ v1.0.7 曾用 `get_package_hint()` 从送样目录名/文件名兜底识别封装，
+> v1.0.8 已整个移除，见 [`CHANGELOG.md`](CHANGELOG.md) 的 [1.0.8] 段。
 
 ## 项目结构
 
@@ -31,9 +48,9 @@ tools/                    辅助脚本（截图、样本数据、版本资源、
 docs/                     文档：版本管理.md、优化审查报告.md、开发对话总结.md
 build.spec                PyInstaller 打包配置（含 Windows 版本资源注入）
 portable/dist/            打包输出（工作目录，会被下一次构建替换）
-releases/                 正式发布产物：带版本号的 zip + SHA256SUMS.txt + manifest
-backups/                  开发过程的源码快照 zip（索引见 backups/README.md）
-mockups/                  界面设计稿与实现截图（分「设计稿」「实现截图」两个子目录）
+releases/                 正式发布产物：便携版 zip + SHA256SUMS.txt + manifest（源码快照 zip 不入库）
+backups/                  开发过程的源码快照 zip（本机保留，不入库；索引见 backups/README.md）
+mockups/                  方案稿索引（方案渲染图本机保留，不入库；见 mockups/README.md）
 ```
 
 ## 运行
@@ -55,10 +72,10 @@ mockups/                  界面设计稿与实现截图（分「设计稿」「
 
 - 发布（唯一流程）：`.venv\Scripts\python.exe tools\make_release.py`
   先构建到临时目录，成功后再替换 `portable\dist`，并在 `releases\` 生成
-  `项目统计_v<版本>_便携版.zip`、源码快照 zip、`SHA256SUMS.txt` 与 `manifest_v<版本>.json`
+  `项目统计_v<版本>_便携版.zip`、源码快照 zip（本地生成，不入库）、`SHA256SUMS.txt` 与 `manifest_v<版本>.json`
 - 只想重新打包、不重新构建：加 `--no-build`
 - 旧的 `build.bat`（先删 `portable\` 再构建，失败会连旧产物一起丢）已于 2026-10-03 **删除**，
-  需要时可以从 `backups\` 里任一源码快照 zip 中取回
+  需要时可以从本机 `backups\` 里任一源码快照 zip 中取回（该目录已不入库）
 
 ## 常见问题：日志里出现「Running at low integrity」
 

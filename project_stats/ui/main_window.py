@@ -62,19 +62,24 @@ from project_stats.ui.theme import (
     APP_BG,
     CARD_HOVER_BG,
     CARD_HOVER_BORDER,
+    CHART_GRID,
+    CHART_SELECTED,
     DETAIL_BOX_BG,
     LINE,
     PANEL_BG,
+    PURPLE,
     ROW_ALT,
     ROW_HOVER,
     ROW_NORMAL,
     ROW_SELECTED,
     SHADOW_COLORS,
     SHADOW_STRONG,
+    SUCCESS,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     TEXT_TERTIARY,
     WALL_BG,
+    WARNING,
 )
 from project_stats.ui.widgets import (
     RoundedButton,
@@ -240,6 +245,8 @@ NONE_FOUND_MESSAGE = "\u672a\u8bfb\u5230\u4efb\u4f55\u9879\u76ee\uff1a\u8be5\u76
 EMPTY_TABLE_TEXT = "\u6682\u65e0\u9879\u76ee\n\u8bf7\u5148\u8bfb\u53d6\u4e00\u4e2a\u4e3b\u8def\u5f84"
 EMPTY_FILTER_TEXT = "\u6ca1\u6709\u5339\u914d\u7684\u9879\u76ee\n\u53ef\u5c1d\u8bd5\u6e05\u7a7a\u7b5b\u9009\u6761\u4ef6"
 LOADING_TABLE_TEXT = "\u6b63\u5728\u8bfb\u53d6\u9879\u76ee\u2026"
+LOAD_TIMEOUT_MS = 15_000
+LOAD_TIMEOUT_TEXT = "读取超时：目录可能位于不可访问的网络盘，请重新选择本地项目目录"
 DEFAULT_CLOSE_ACTION = "minimize_to_background"
 EXIT_CLOSE_ACTION = "exit"
 APP_ICON_FILE = "\u9879\u76ee\u7edf\u8ba1.ico"
@@ -301,6 +308,8 @@ class ProjectBrowser(tk.Tk):
         self.package_list: list[str] = []
         self._search_after_id: str | None = None
         self._load_in_progress = False
+        self._load_token = 0
+        self._load_timeout_id: str | None = None
         self._column_widths: dict[str, int] = {}
         self._item_paths: dict[str, str] = {}
         self._path_to_item: dict[str, str] = {}
@@ -426,11 +435,11 @@ class ProjectBrowser(tk.Tk):
 
     def _build_widgets(self) -> None:
         # 结构（卡片视图 = 方案 E；表格视图沿用 D2 布局）：
-        #   行0：主路径 + [卡片视图｜表格视图] + 排序 + 浏览/读取/新增项目/项目统计/设置
-        #   行1：左侧一列 = 筛选 + 关键字搜索 + 列表（表格 或 卡片墙，二选一显示）
-        #        表格视图右侧一列 = 信息卡 + 项目详情；卡片视图下右栏收起来，卡片墙吃满整宽
-        #   行2：状态栏（卡片视图下右侧补一行统计数字）
-        self.rowconfigure(1, weight=1)
+        #   行0：主路径 + [卡片视图｜表格视图] + 主操作
+        #   行1：概览指标（项目 / 送样 / 业务员 / 芯片）
+        #   行2：筛选 + 搜索 + 列表；表格视图右侧为当前项目详情
+        #   行3：状态栏
+        self.rowconfigure(2, weight=1)
         self.columnconfigure(0, weight=1)
 
         # ---------------- 行 0：主路径 + 视图切换 + 操作按钮
@@ -463,15 +472,18 @@ class ProjectBrowser(tk.Tk):
         # 键盘入口：Ctrl+1 / Ctrl+2 直接切视图，Ctrl+Tab 轮流切。
         self.bind("<Control-Key-1>", lambda _event: self.set_view_mode(VIEW_MODE_CARDS))
         self.bind("<Control-Key-2>", lambda _event: self.set_view_mode(VIEW_MODE_TABLE))
+        self.bind("<Control-Key-k>", lambda _event: self._focus_search())
+
+        # ---------------- 行 1：概览指标
+        # summary_vars 在右侧详情构建时初始化，因此先建侧栏模型，再把指标渲染到顶部。
 
         # ---------------- 行 1：左右两栏
         content = ttk.Frame(self, style="Band.TFrame", padding=(12, 0, 12, 6))
-        content.grid(row=1, column=0, sticky="nsew")
-        # 目标：右栏（详情）占内容宽度 40%，左栏 60%（中间有 14px 间距，
-        # 所以权重不能直接写 6:4，否则右栏实际只有 33%）。
-        content.columnconfigure(0, weight=60, minsize=500)
+        content.grid(row=2, column=0, sticky="nsew")
+        # 详情栏保持信息可读，但把更多空间留给项目列表。
+        content.columnconfigure(0, weight=68, minsize=540)
         content.columnconfigure(1, minsize=14)
-        content.columnconfigure(2, weight=40, minsize=340)
+        content.columnconfigure(2, weight=32, minsize=300)
         content.rowconfigure(0, weight=1)
         self._content_frame = content
 
@@ -532,10 +544,11 @@ class ProjectBrowser(tk.Tk):
 
         # 右栏：信息卡 + 详情（表格视图专用；卡片视图下详情在卡片内部展开）
         self._build_side_panel(content)
+        self._build_overview_strip()
 
         # ---------------- 状态栏
         status_frame = ttk.Frame(self, style="Band.TFrame", padding=(12, 6, 12, 10))
-        status_frame.grid(row=2, column=0, sticky="ew")
+        status_frame.grid(row=3, column=0, sticky="ew")
         ttk.Separator(status_frame, style="Card.TSeparator").pack(fill="x", pady=(0, 6))
         status_row = ttk.Frame(status_frame, style="Band.TFrame")
         status_row.pack(fill="x")
@@ -547,6 +560,41 @@ class ProjectBrowser(tk.Tk):
         self.summary_inline_label.pack(side="right", padx=(10, 0))
         ttk.Label(status_row, textvariable=self.status_var, style="Status.TLabel", anchor="w").pack(
             side="left", fill="x", expand=True
+        )
+
+    def _focus_search(self) -> str:
+        """快速搜索入口，保持 Ctrl+K 在两种视图下都可用。"""
+        self.entry_search_keyword.focus_set()
+        self.entry_search_keyword.selection_range(0, tk.END)
+        return "break"
+
+    def _build_overview_strip(self) -> None:
+        """顶部概览指标：让用户在不打开统计窗口的情况下先读懂当前数据规模。"""
+        panel = RoundedPanel(
+            self, self.theme, fill=PANEL_BG,
+            padding=(dpi.scaled(16, self._scale), dpi.scaled(8, self._scale)),
+            hug=True,
+        )
+        panel.grid(row=1, column=0, sticky="ew", padx=dpi.scaled(12, self._scale), pady=(0, dpi.scaled(8, self._scale)))
+        body = panel.body
+        body.columnconfigure(0, weight=0)
+        body.columnconfigure(5, weight=1)
+        ttk.Label(body, text="概览", style="MetricLabel.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 18))
+        metrics = (
+            (SUMMARY_PROJECTS, ACCENT),
+            (SUMMARY_SAMPLES, SUCCESS),
+            (SUMMARY_SALESMEN, WARNING),
+            (SUMMARY_CHIPS, PURPLE),
+        )
+        for index, (label, color) in enumerate(metrics, start=1):
+            body.columnconfigure(index, weight=0, uniform="overview")
+            cell = ttk.Frame(body, style="Metric.TFrame")
+            cell.grid(row=0, column=index, sticky="ew", padx=(0 if index == 1 else 18, 18))
+            ttk.Label(cell, text=label, style="MetricLabel.TLabel").pack(anchor="w")
+            ttk.Label(cell, textvariable=self.summary_vars[label], style="MetricValue.TLabel",
+                      foreground=color).pack(anchor="w", pady=(1, 0))
+        ttk.Label(body, text="Ctrl+K  快速搜索", style="Status.TLabel", anchor="e").grid(
+            row=0, column=5, sticky="e"
         )
 
     def _build_table(self, parent: ttk.Frame) -> None:
@@ -739,13 +787,14 @@ class ProjectBrowser(tk.Tk):
             DISPLAY_SAMPLE_COUNT: 0.6,
         }
         # 最小列宽按真实字体测量：不同字体/DPI 下同一个值的像素宽度差很多，
-        # 硬编码数字在换字体后会把 "K00123456" 截成 "K00123450("。
+        # 硬编码数字在换字体后会把 "K00123456" 截成 "K0012345("。
+        # 下面这些只用来量宽度，刻意用匿名占位值，不放真实业务数据。
         samples = {
             DISPLAY_SEQUENCE: "888",
             DISPLAY_YEAR: "2026",
-            DISPLAY_SALESMAN: "业务员D",
+            DISPLAY_SALESMAN: "业务员甲",
             DISPLAY_CLIENT: "K00123456",
-            DISPLAY_PROJECT_NAME: "项目01",
+            DISPLAY_PROJECT_NAME: "项目名称示例",
             DISPLAY_CHIP_NAME: "型号A00000000",
             DISPLAY_PACKAGE: "TSSOP20",
             DISPLAY_CREATED_DATE: "2026-09-23",
@@ -821,37 +870,14 @@ class ProjectBrowser(tk.Tk):
         side = ttk.Frame(parent, style="Band.TFrame")
         side.grid(row=0, column=2, sticky="nsew")
         side.columnconfigure(0, weight=1)
-        side.rowconfigure(1, weight=1)
+        side.rowconfigure(0, weight=1)
         self._side_panel = side
 
-        # 顶部信息卡：圆角 + 阴影；高度跟着内容走（hug），不要被网格拉高
-        gap = dpi.scaled(12, self._scale)
-        info_panel = RoundedPanel(
-            side, self.theme, fill=PANEL_BG, hug=True,
-            padding=(dpi.scaled(12, self._scale), dpi.scaled(11, self._scale)),
-        )
-        info_panel.grid(row=0, column=0, sticky="ew", pady=(0, gap))
-        card = info_panel.body
-        self.summary_vars: dict[str, tk.StringVar] = {}
-        metrics = (
-            (SUMMARY_PROJECTS, ACCENT),
-            (SUMMARY_SAMPLES, "#34c759"),
-            (SUMMARY_SALESMEN, "#ff9f0a"),
-            (SUMMARY_CHIPS, "#af52de"),
-        )
-        for index, (label, color) in enumerate(metrics):
-            card.columnconfigure(index, weight=1, uniform="metric")
-            cell = ttk.Frame(card, style="Metric.TFrame")
-            cell.grid(row=0, column=index, sticky="nsew", padx=(0 if index == 0 else 8, 0))
-            var = tk.StringVar(value="—")
-            self.summary_vars[label] = var
-            accent_bar = tk.Frame(cell, width=4, height=42, bg=color, highlightthickness=0)
-            accent_bar.pack(side="left", fill="y", padx=(0, 8))
-            metric_body = ttk.Frame(cell, style="Metric.TFrame")
-            metric_body.pack(side="left", fill="both", expand=True)
-            ttk.Label(metric_body, text=label, style="MetricLabel.TLabel").pack(anchor="w")
-            ttk.Label(metric_body, textvariable=var, style="MetricValue.TLabel",
-                      foreground=color).pack(anchor="w", pady=(1, 0))
+        # 顶部概览条复用这些变量；详情侧栏不再重复显示同一组数字。
+        self.summary_vars: dict[str, tk.StringVar] = {
+            label: tk.StringVar(value="—")
+            for label in (SUMMARY_PROJECTS, SUMMARY_SAMPLES, SUMMARY_SALESMEN, SUMMARY_CHIPS)
+        }
 
         # 项目详情：同样是圆角 + 阴影；内部靠浅分隔线和浅色信息块分层，
         # 避免“白卡片套白卡片”导致文字与背景对比失衡。
@@ -859,7 +885,7 @@ class ProjectBrowser(tk.Tk):
             side, self.theme, fill=PANEL_BG,
             padding=(dpi.scaled(12, self._scale), dpi.scaled(11, self._scale)),
         )
-        detail_panel.grid(row=1, column=0, sticky="nsew")
+        detail_panel.grid(row=0, column=0, sticky="nsew")
         detail = detail_panel.body
         detail.columnconfigure(0, weight=1)
         detail.rowconfigure(2, weight=1)
@@ -1004,7 +1030,7 @@ class ProjectBrowser(tk.Tk):
             self._table_frame.grid()
             self._side_panel.grid()
             self._content_frame.columnconfigure(1, minsize=14)
-            self._content_frame.columnconfigure(2, weight=40, minsize=340)
+            self._content_frame.columnconfigure(2, weight=32, minsize=300)
             self.sort_label.pack_forget()
             self.sort_combo.pack_forget()
 
@@ -2150,20 +2176,36 @@ class ProjectBrowser(tk.Tk):
 
         self.path_var.set(base_path)
         self._save_settings()
+        self._load_token += 1
+        load_token = self._load_token
+        if self._load_timeout_id is not None:
+            try:
+                self.after_cancel(self._load_timeout_id)
+            except tk.TclError:
+                pass
+            self._load_timeout_id = None
         self._set_loading_state(True)
         self.logger.info("Loading projects from %s", base_path)
+        self._load_timeout_id = self.after(
+            LOAD_TIMEOUT_MS,
+            lambda token=load_token, path=base_path: self._handle_load_timeout(token, path),
+        )
 
         def worker() -> None:
             try:
                 catalog = self.project_service.load_projects(base_path)
             except Exception as exc:
                 try:
-                    self.after(0, lambda error=exc: self._finish_load_projects(base_path, None, error, notify_on_complete))
+                    self.after(0, lambda error=exc, token=load_token: self._finish_load_projects(
+                        base_path, None, error, notify_on_complete, token
+                    ))
                 except (tk.TclError, RuntimeError):
                     return
                 return
             try:
-                self.after(0, lambda result=catalog: self._finish_load_projects(base_path, result, None, notify_on_complete))
+                self.after(0, lambda result=catalog, token=load_token: self._finish_load_projects(
+                    base_path, result, None, notify_on_complete, token
+                ))
             except (tk.TclError, RuntimeError):
                 return
 
@@ -2171,15 +2213,34 @@ class ProjectBrowser(tk.Tk):
         self._load_thread = threading.Thread(target=worker, daemon=True)
         self._load_thread.start()
 
+    def _handle_load_timeout(self, token: int, base_path: str) -> None:
+        """让失联网络盘不再把界面永久锁在“读取中”。"""
+        if token != self._load_token or not self._load_in_progress:
+            return
+        self._load_timeout_id = None
+        self._load_token += 1  # 丢弃稍后才返回的旧线程结果
+        self._set_loading_state(False)
+        self.status_var.set(LOAD_TIMEOUT_TEXT)
+        self.logger.error("Loading projects timed out after %sms: %s", LOAD_TIMEOUT_MS, base_path)
+        self._update_empty_state(bool(self.tree.get_children()))
+
     def _finish_load_projects(
         self,
         base_path: str,
         catalog: ProjectCatalog | None,
         error: Exception | None,
         notify_on_complete: bool = True,
+        token: int | None = None,
     ) -> None:
-        if not self.winfo_exists():
+        if not self.winfo_exists() or (token is not None and token != self._load_token):
             return
+
+        if self._load_timeout_id is not None:
+            try:
+                self.after_cancel(self._load_timeout_id)
+            except tk.TclError:
+                pass
+            self._load_timeout_id = None
 
         self._set_loading_state(False)
 
@@ -2203,8 +2264,10 @@ class ProjectBrowser(tk.Tk):
         extra_parts = []
         if summary.invalid_project_folders:
             extra_parts.append(f"跳过无效目录 {summary.invalid_project_folders} 个")
-        if summary.unresolved_chip_info:
-            extra_parts.append(f"芯片信息未识别 {summary.unresolved_chip_info} 个")
+        if summary.unresolved_chip_name:
+            extra_parts.append(f"芯片型号未识别 {summary.unresolved_chip_name} 个（根目录无标记文件）")
+        if summary.unresolved_package:
+            extra_parts.append(f"脚位未识别 {summary.unresolved_package} 个（标记文件名没写封装）")
         if summary.unreadable_directories:
             extra_parts.append(f"无法读取目录 {summary.unreadable_directories} 个")
 
@@ -2612,7 +2675,7 @@ class ProjectBrowser(tk.Tk):
             ax.spines["left"].set_color(LINE)
             ax.spines["bottom"].set_color(LINE)
             ax.tick_params(colors=TEXT_SECONDARY)
-            ax.grid(axis="y", color="#e5e5ea", linewidth=0.8)
+            ax.grid(axis="y", color=CHART_GRID, linewidth=0.8)
             bars = ax.bar(stats.keys(), stats.values(), color=ACCENT)
             title_prefix = selected_year if selected_year != ALL_OPTION else ALL_YEARS_TEXT
             ax.set_title(
@@ -2630,7 +2693,7 @@ class ProjectBrowser(tk.Tk):
             def on_hover(sel):
                 for bar in bars:
                     bar.set_color(ACCENT)
-                bars[sel.index].set_color("#34c759")
+                bars[sel.index].set_color(CHART_SELECTED)
                 name = list(stats.keys())[sel.index]
                 value = list(stats.values())[sel.index]
                 sel.annotation.set_text(HOVER_TEXT.format(name=name, value=value))

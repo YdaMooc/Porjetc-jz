@@ -24,16 +24,20 @@ PACKAGE_NAME_PATTERN = (
     r"\d+(?:-\d+(?![\dA-Za-z]))?"       # SOP8 / SOT23-6：允许 -6 这类脚位数
     r"|(?P<bare>SOP|SOIC|DIP|QFN|DFN|QFP)(?=-\d)"  # SOP-8 / XYZ-SOIC-8：连字符写法统一输出 SOP / SOIC
 )
-# 不用 $ 锚定：真实标记文件形如 型号A01-SOP8、型号A10-SOT23-6、ABC-QFN32(4x4)、HX-SOP16A，
+# 只用来解析「项目根目录的 0 字节无扩展名标记文件」这一个名字。
+# 不用 $ 锚定：真实标记文件形如 型号A01-SOP8、型号B21-SOT23-6、ABC-QFN32(4x4)、HX-SOP16A，
 # 封装名后常带额外后缀。命名语义由 _split_chip_and_package() 负责，这里只负责"找出封装字样"。
+#
+# 【数据安全约束】芯片型号与脚位只允许来自根目录的标记文件名。
+# 不要去读「送样」及其子目录——那里放的是已经送出去的样品版本，只允许按名字统计版本数
+# （count_sample_versions），不允许为了补全字段去读它的目录名或文件名：
+# 一旦读取范围扩到送样目录，任何"顺手读一下"的改动都可能碰到历史送样文件，风险不对等。
 PACKAGE_PATTERN = re.compile(PACKAGE_NAME_PATTERN, re.IGNORECASE)
 PACKAGE_TAIL_PATTERN = re.compile(
     rf"[-_\s]*(?P<pkg>{PACKAGE_NAME_PATTERN})(?![\dA-Za-z])(?:[-_\s(].*)?$",
     re.IGNORECASE,
 )
 SAMPLE_DIR_NAME = "\u9001\u6837"
-# 为了识别封装而扫描的文件名上限（每个项目），避免在大项目上耗时。
-PACKAGE_HINT_FILE_LIMIT = 300
 SAMPLE_VERSION_PATTERN = re.compile(
     # 兼容两种送样版本目录命名：
     #   规范命名：v1.0-20260926-1510（日期后带时间/描述）
@@ -73,7 +77,8 @@ def _is_ascii_year(value: str) -> bool:
 class ProjectLoadSummary:
     # 这些计数不是业务数据，只是给界面一个“加载时发生了什么”的可见反馈。
     invalid_project_folders: int = 0
-    unresolved_chip_info: int = 0
+    unresolved_chip_name: int = 0
+    unresolved_package: int = 0
     unreadable_directories: int = 0
 
 
@@ -166,7 +171,8 @@ class ProjectService:
 
         return UNSET_OPTION, UNSET_OPTION
 
-    def _split_chip_and_package(self, entry: str) -> tuple[str, str]:
+    @staticmethod
+    def _split_chip_and_package(entry: str) -> tuple[str, str]:
         # 从标记文件名里拆出"芯片型号 + 封装"。
         # 先按"封装在结尾"处理（型号A01-SOP8），这样芯片名最干净；
         # 结尾对不上时退而求其次，取文件名里最后一处封装字样（HX-SOP16A）。
@@ -189,55 +195,6 @@ class ProjectService:
             return entry, UNSET_OPTION
 
         return entry, UNSET_OPTION
-
-    def get_package_hint(self, project_path: str) -> str:
-        # 真实数据里，封装常常不在根标记文件上：
-        #   第一层：送样版本目录名，如 ...-型号B21-SOP14-0x8A7D-...
-        #   第二层：版本目录里的截图/文件名，如 业务员E-K00123459-XX-型号B30SOP8-0x467F1C-20260714.png
-        # 先用目录名（便宜），再退到文件名（有扫描上限，避免大项目上过慢）。
-        sample_path = os.path.join(project_path, SAMPLE_DIR_NAME)
-        if not os.path.isdir(sample_path):
-            return UNSET_OPTION
-
-        try:
-            entries = list(os.scandir(sample_path))
-        except OSError:
-            return UNSET_OPTION
-
-        subdirs = [entry for entry in entries if entry.is_dir(follow_symlinks=False)]
-        matches: Counter[str] = Counter()
-        for entry in subdirs:
-            for match in PACKAGE_PATTERN.finditer(entry.name):
-                matches[match.group(0).upper()] += 1
-
-        if not matches:
-            self._collect_package_hints_from_files(subdirs, matches)
-
-        if not matches:
-            return UNSET_OPTION
-        return matches.most_common(1)[0][0]
-
-    @staticmethod
-    def _collect_package_hints_from_files(version_dirs: list[os.DirEntry], matches: Counter[str]) -> None:
-        # 只扫版本目录的直接子项文件名，不递归；一旦命中就停，避免在大项目上耗时。
-        scanned = 0
-        for version_dir in version_dirs:
-            try:
-                children = list(os.scandir(version_dir.path))
-            except OSError:
-                continue
-            for child in children:
-                if child.is_dir(follow_symlinks=False):
-                    continue
-                if scanned >= PACKAGE_HINT_FILE_LIMIT:
-                    return
-                scanned += 1
-                hit = False
-                for match in PACKAGE_PATTERN.finditer(child.name):
-                    matches[match.group(0).upper()] += 1
-                    hit = True
-                if hit:
-                    return
 
     # ------------------------------------------------------------ 新增项目辅助
 
@@ -479,12 +436,13 @@ class ProjectService:
                         continue
 
                     sequence, client, project_name, created_date = parsed_folder
+                    # 芯片型号与脚位只认根目录的标记文件名；标记文件没写封装就如实留空，
+                    # 不去「送样」目录里找（那里是已送出的样品版本，不读、不改、不猜）。
                     chip_name, package_name = self.get_chip_info(full_path)
+                    if chip_name == UNSET_OPTION:
+                        summary.unresolved_chip_name += 1
                     if package_name == UNSET_OPTION:
-                        # 根标记文件没有封装信息时，用「送样」目录名里的封装兜底。
-                        package_name = self.get_package_hint(full_path)
-                    if package_name == UNSET_OPTION:
-                        summary.unresolved_chip_info += 1
+                        summary.unresolved_package += 1
                     sample_count = self.count_sample_versions(full_path)
 
                     record = ProjectRecord(

@@ -19,11 +19,25 @@ portable/
 # ---- IDE ----
 .idea/
 
-# ---- 发布二进制（便携版 zip 体积大，不入库；137 KB 的源码快照 zip 入库）----
+# ---- 发布二进制与源码快照（都不入库）----
 releases/*_便携版.zip
+releases/*_source.zip
 
 # ---- 其它 ----
 *.tmp
 ~$*
 Thumbs.db
 desktop.ini
+
+# ---- 本地验证产物（样本树、截图、一次性压测/探针脚本；由 tools/ 下的工具重新生成）----
+.verify_fixture/
+.verify_shots/
+_bench_*.py
+_probe_*.py
+_probe_*.log
+# 界面图（实现截图、设计稿）都是过程产物：需要时用 tools/render_main_window.py 现场重拍，拍完不要提交
+mockups/实现截图/
+mockups/设计稿/
+
+# 源码快照 zip 与索引只在本机保留
+backups/

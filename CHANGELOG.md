@@ -12,6 +12,127 @@
 > 时间线**追溯编号**的——当时并没有用这些版本号打过包。它们的作用是把 2026-09-26 ~ 09-30
 > 的四批改动分开记账，每条都对应那一批真实存在的源码快照 zip。
 
+## [1.0.8] — 2026-10-05
+
+**数据安全修正**：芯片型号与脚位改为**只读项目根目录的标记文件名**，不再去 `送样`
+目录补全封装。
+
+### 背景
+
+v1.0.5 为了把「封装未识别 119/122 → 2/122」，加了 `get_package_hint()`：根标记文件名里
+没写封装时，退到 `送样\` 下**送样版本目录名**、再退到**版本目录内的文件名**里去找封装字样。
+识别率确实上去了，但代价是程序开始读送样目录里的东西——那里放的是**已经送出去的样品版本**，
+任何"顺手读一下"的改动都可能碰到历史送样文件，风险不对等。这项兜底整个移除。
+
+### 变更
+
+- 删除 `ProjectService.get_package_hint()` 与 `_collect_package_hints_from_files()`，
+  以及只为它们服务的 `PACKAGE_HINT_FILE_LIMIT = 300`
+- `project_service.py` 的 `PACKAGE_PATTERN` 上方写明数据安全约束：
+  芯片型号与脚位只允许来自根目录标记文件名，不得读取送样目录内容
+- `load_projects()` 不再做封装兜底：标记文件名没写封装就如实留「未设置」
+- `ProjectLoadSummary.unresolved_chip_info` 拆成 `unresolved_chip_name` 与
+  `unresolved_package` 两个计数，状态栏提示相应改为
+  「芯片型号未识别 N 个（根目录无标记文件）」「脚位未识别 N 个（标记文件名没写封装）」
+
+### 影响（实测真实数据 151 个项目）
+
+- 脚位未识别：**4 → 85**。这是这次修正的代价，也是它要解决的问题的性质：
+  旧版那 81 个"识别出来"的脚位，全是从送样目录的目录名或文件名里读出来的，
+  没有一个是根标记文件写的
+- 未识别的 85 个里有 73 个项目**根本没有 `送样` 目录**——对这些项目，旧兜底同样无能为力，
+  新旧版都会显示「未设置」
+- 项目数、送样次数、筛选与排序、其余字段全部不变；`送样` 目录仍按**名字**统计版本数
+  （`count_sample_versions` 只用 `os.scandir` 读目录项名字，不读文件内容、不递归、不写入）
+- 筛选下拉里的「未设置」正好用来找出这 85 个项目，方便人工确认脚位
+
+### 验证
+
+- 抽一个具体项目对照：脚位由 `SOP16`（旧版从送样文件名里认出来的）变为「未设置」，
+  芯片型号与送样次数均不变
+- 全量加载 151 个项目：`unresolved_chip_name=1`、`unresolved_package=85`、脚位候选 8 个
+- 用一次性的旧逻辑复刻脚本对比出上面的 4 → 85（脚本已删）
+- 实现截图改用真实数据（151 项目 / 408 送样）重拍，图里能直接看到「脚位」有值 /
+  「未设置」两种状态（该截图目录已于 1.0.9 移出仓库）
+- `compileall project_stats` 通过
+
+## [1.0.7] — 2026-10-05
+
+界面配色改为柔和现代色板。**只换颜色，不动布局**：控件位置、尺寸、文字、筛选与排序逻辑
+全部保持原样，逐屏截图核对过内容没有丢失。
+
+### 变更
+
+- `project_stats\ui\theme.py` 的配色段整体重写，确立四条规则写在文件顶部：
+  中性色统一带蓝紫色相（约 225°）、强调色只用于「可点 / 已选中 / 数字」、
+  不用纯黑与满饱和色、同一颜色全仓只允许一个定义
+- 主色由亮蓝 `#0a6ff0` 改为低饱和靛蓝 `#4a6cf0`，并按「常态 / 悬停 / 按下」补成三档
+  （删掉旧常量 `ACCENT_DARK`，改为 `ACCENT_HOVER` `#3a58d4` 与 `ACCENT_ACTIVE` `#3350c0`）
+- 中性色整体降对比：页面底色 `#eef0f5 → #f4f6fa`、分隔线 `#e6e8ef → #eceef4`、
+  正文 `#1b1c20 → #23252f`、次要文字 `#6b6e7a → #666c7e`、三级文字 `#989ba6 → #9aa0af`
+- 卡片阴影明显减弱（`SHADOW_COLORS` `#d7d9e4/#e4e6ef/#eff1f7 → #e2e5ef/#ebedf5/#f3f5fa`），
+  卡片靠底色差浮起来，而不是靠明显的投影
+- 图表配色接入主题：网格线 `CHART_GRID` `#ebeef5`、悬停选中的柱子 `CHART_SELECTED` `#4fae84`，
+  柱体用 `ACCENT`
+- **收敛散落的硬编码色**：按钮 / 滚动条 / 标签页 / 分段控件里的 `#bcd6fb` `#f2f7ff` `#d3d6e2`
+  `#bfc3d4` `#aeb3c7` `#e7e9f1` `#eef0f6` `#e7e9f0` 等 14 处字面值全部改为主题常量，
+  新增 `SEGMENT_TROUGH` / `BTN_HOVER` / `BTN_PRESSED` / `BTN_GHOST_HOVER` / `BTN_GHOST_PRESSED` /
+  `SCROLL_THUMB*` / `TAB_BG` / `TAB_HOVER` / `CHART_GRID` / `CHART_SELECTED` /
+  `ACCENT_TINT` / `ACCENT_TINT_FG` / `PURPLE` 等具名 token
+- 概览条四个数字各用一个颜色：项目 `ACCENT`、送样 `SUCCESS`、业务员 `WARNING`、芯片 `PURPLE`
+
+### 明确不做的项
+
+- 不改用 QML 重写：本项目的技术栈是 Tkinter/ttk + 自绘圆角控件，
+  配色属于主题层改动，换工具包会把 2700 行的主窗口全部推倒重来，收益与风险不成比例
+- 不改系统托盘图标配色（`project_stats\platform\tray_service.py` 的 `#007aff/#34c759/#ff9f0a`）：
+  那是应用在系统托盘里的品牌色，与窗口内的色板不是一回事
+
+### 验证
+
+- `tools\render_main_window.py` 新增子窗口截图能力（第 8 个参数 `settings|stats|new`），
+  用于逐屏核对
+- 抓图方式由抓屏（`ImageGrab`）改为 `PrintWindow`：本机环境下被主窗口遮住的子窗口
+  在抓屏里根本拍不到（`GetWindowRect` / `IsWindowVisible` 都正常也不行，试过
+  `-topmost`、`lift()`、`SetWindowPos` 抬 z 序均无效），改成让窗口自己往内存 DC
+  重画一遍才稳定；代价是对话框丢了系统投影，图里对话框外圈有一圈黑边
+- 122 项目 / 319 送样样本数据下逐屏截图：卡片视图、卡片展开、表格视图、设置窗口、
+  统计窗口、新增项目对话框均确认文字、数字、按钮、滚动条完整
+- `mockups\实现截图\美化_*.png` 5 张按新配色重拍（原先的截图是 v1.0.4 ~ v1.0.5 的样子）
+
+---
+
+## [1.0.7.1] — 2026-10-05
+
+开发工具修正（**不影响程序本体**，`project_stats\` 本次未改动）。
+
+### 修正
+
+- `tools\render_main_window.py` 截图 `stats` 目标时进程永不退出（表现为"卡死"）：
+  统计子窗口里的 `plt.subplots()` 走 pyplot，matplotlib 的 TkAgg 后端会**另建一个隐藏的
+  Tk 主窗口**（`matplotlib/backends/_backend_tk.py` 的 `FigureManagerTk.create_with_canvas`：
+  `window = tk.Tk(className="matplotlib"); window.withdraw()`），而 `tkinter` 的 `mainloop()`
+  要等进程里所有 Tk 主窗口都销毁才返回——只 `app.destroy()` 的话，图早已存盘、命令却永远挂在
+  `app.mainloop()` 上（stdout 走管道时还是块缓冲，连一行打印都看不到）
+- 修法：截图存盘后走新的 `shutdown()`，先 `plt.close("all")` 拆掉那个隐藏主窗口再
+  `app.destroy()`；用 `"matplotlib.pyplot" in sys.modules` 判断，保证非绘图分支行为不变
+- 效果：`stats` 目标由「永不返回」变为 **11.6s / EXIT=0**，`main` 目标仍 10.8s / EXIT=0
+- 顺带纠正上文一句：`stats` 截图慢**不是** matplotlib 初始化慢，`_load_chart_modules()` 只需
+  0.77s；此前把它记成"已知问题"是误判
+
+---
+
+## [1.0.6] — 2026-10-03
+
+主界面信息架构优化，按新版渲染稿落地：
+
+- 新增顶部概览条，实时显示当前筛选结果的项目数、送样数、业务员数和芯片数
+- 表格视图移除重复的信息卡，详情栏扩大可用高度并将列表与详情比例调整为约 68:32
+- 新增 `Ctrl+K` 快速聚焦搜索框，并保留 `Ctrl+1` / `Ctrl+2` 视图切换
+- 卡片视图与表格视图共用同一组概览数据，避免统计数字在不同视图间跳动
+- 目录加载增加 15 秒超时保护，失联网络盘不会永久锁住界面；仿真脚本在创建窗口前禁用上次路径自动恢复
+- 保持原有路径、筛选、搜索、排序、详情、统计和托盘流程不变
+
 ---
 
 ## [1.0.5] — 2026-10-03
@@ -112,7 +233,7 @@
 - **`main_window.py` 导入即崩**：第 20 行调用 `dpi.enable_dpi_awareness()`，而
   `from project_stats.runtime import dpi` 在第 54 行 → `NameError: name 'dpi' is not defined`
 - `SegmentedControl` 的 `self._options` 覆盖了 `tkinter.Misc._options()` → 控件构造报错（改名 `self._labels`）
-- 换字体后表格列宽截断（`K00123456` 显示成 `K00123450(`），改为按真实字体测量最小列宽
+- 换字体后表格列宽截断（`K00123456` 显示成 `K0012345(`），改为按真实字体测量最小列宽
 - 画布默认请求尺寸 378×265 把右栏网格撑高，改为 `configure(width=1, height=1)`
 
 ### 明确不做的项（有实测依据）
